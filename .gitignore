@@ -1,0 +1,8 @@
+# Ignore captures and local files
+*.pcap
+*.pcapng
+*.pcap.gz
+capture_*.pcap*
+*.sqlite
+.vscode/
+.DS_Store
