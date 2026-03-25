@@ -146,12 +146,17 @@ Security note:
 
 ## Auto-start mon0 on Boot (systemd)
 
-Two files in this repository automate the monitor interface setup at every Ubuntu startup:
+Three files in this repository automate the monitor interface setup whenever the sniffer adapter is present:
 
 | File | Purpose |
 |---|---|
 | `setup_mon0.sh` | Shell script — creates `mon0` from the sniffer adapter and sets the channel |
-| `mon0-setup.service` | systemd unit — runs the script after network devices are enumerated |
+| `mon0-setup.service` | systemd unit — runs the script when triggered |
+| `99-mon0-setup.rules` | udev rule — fires the service the moment the adapter is enumerated by the kernel |
+
+### Why udev instead of a plain systemd timer?
+
+A USB Wi-Fi adapter is not guaranteed to appear before time-based systemd services run. A udev rule is **event-driven**: it fires exactly when the kernel registers the interface — whether at boot or when you hot-plug the dongle later. This avoids the "Interface not found" race condition.
 
 ### Configuration
 
@@ -180,15 +185,19 @@ Run the following commands once (requires root):
 
 ```bash
 # 1. Copy files into place
-sudo cp setup_mon0.sh      /usr/local/sbin/setup_mon0.sh
-sudo cp mon0-setup.service /etc/systemd/system/mon0-setup.service
+sudo cp setup_mon0.sh       /usr/local/sbin/setup_mon0.sh
+sudo cp mon0-setup.service  /etc/systemd/system/mon0-setup.service
+sudo cp 99-mon0-setup.rules /etc/udev/rules.d/99-mon0-setup.rules
 
 # 2. Make the script executable
 sudo chmod +x /usr/local/sbin/setup_mon0.sh
 
-# 3. Reload systemd and enable the service
+# 3. Reload systemd and udev rules
 sudo systemctl daemon-reload
-sudo systemctl enable --now mon0-setup.service
+sudo udevadm control --reload-rules
+
+# NOTE: do NOT run "systemctl enable mon0-setup.service"
+# The udev rule starts it automatically when the adapter appears.
 ```
 
 ### Verify and manage
@@ -200,23 +209,26 @@ systemctl status mon0-setup.service
 # View full logs
 journalctl -u mon0-setup.service
 
-# Run manually without rebooting (useful for testing config changes)
+# Simulate the udev add event to test without unplugging the dongle
+sudo udevadm trigger --action=add --subsystem-match=net \
+    --attr-match=ifindex=$(cat /sys/class/net/wlx289401bca7bd/ifindex)
+
+# Run the script manually (useful for testing config changes)
 sudo /usr/local/sbin/setup_mon0.sh
 
 # Confirm mon0 is up and on the right channel
 iw dev mon0 info
-
-# Disable auto-start (does not remove files)
-sudo systemctl disable mon0-setup.service
 ```
 
 ### Uninstall
 
 ```bash
-sudo systemctl disable --now mon0-setup.service
+sudo systemctl stop mon0-setup.service
 sudo rm /etc/systemd/system/mon0-setup.service
+sudo rm /etc/udev/rules.d/99-mon0-setup.rules
 sudo rm /usr/local/sbin/setup_mon0.sh
 sudo systemctl daemon-reload
+sudo udevadm control --reload-rules
 ```
 
 ---
