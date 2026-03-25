@@ -16,16 +16,25 @@ IFACE="wlx289401bca7bd"
 MON_IFACE="mon0"
 CHANNEL=165
 FREQ_MHZ=5825   # used only when CHANNEL=0
+WAIT_SECS=40    # max seconds to wait for the adapter to appear at boot
 
 log() { echo "[$(date '+%Y-%m-%d %T')] $*"; }
 
-# ── Guard: adapter must be present ──────────────────────────────────────────
-if ! ip link show "${IFACE}" &>/dev/null; then
-    log "Interface ${IFACE} not found — skipping mon0 setup."
-    exit 0
-fi
+# ── Wait for the adapter to appear ──────────────────────────────────────────
+# At boot the USB adapter may be enumerated after this service starts, so we
+# poll instead of failing immediately.  On hot-plug the adapter is already
+# present and the loop exits on the first iteration.
+count=0
+until ip link show "${IFACE}" &>/dev/null; do
+    if [[ ${count} -ge ${WAIT_SECS} ]]; then
+        log "Timed out after ${WAIT_SECS}s waiting for ${IFACE} — adapter not present, skipping."
+        exit 0
+    fi
+    sleep 1
+    (( count++ ))
+done
 
-log "Adapter ${IFACE} detected — setting up ${MON_IFACE}..."
+log "Adapter ${IFACE} detected after ${count}s — setting up ${MON_IFACE}..."
 
 # ── Tear down any previous monitor interface with the same name ───────────
 if ip link show "${MON_IFACE}" &>/dev/null; then

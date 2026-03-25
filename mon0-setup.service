@@ -1,31 +1,34 @@
 # mon0-setup.service — systemd unit to create a Wi-Fi monitor interface.
 #
-# This service is triggered by the udev rule (99-mon0-setup.rules) whenever the
-# sniffer adapter is enumerated by the kernel — at boot OR when hot-plugged.
-# Do NOT enable this service with "systemctl enable"; let udev start it instead.
+# Started two ways:
+#   1. At boot via "systemctl enable" (script waits up to WAIT_SECS for the adapter).
+#   2. On hot-plug via the udev rule (99-mon0-setup.rules) — adapter already present.
+# Type=oneshot + RemainAfterExit=yes prevents double-runs if both triggers fire.
 #
 # Install instructions (run as root):
-#   cp setup_mon0.sh      /usr/local/sbin/
-#   chmod +x              /usr/local/sbin/setup_mon0.sh
-#   cp mon0-setup.service /etc/systemd/system/
+#   cp setup_mon0.sh       /usr/local/sbin/
+#   chmod +x               /usr/local/sbin/setup_mon0.sh
+#   cp mon0-setup.service  /etc/systemd/system/
 #   cp 99-mon0-setup.rules /etc/udev/rules.d/
 #   systemctl daemon-reload
 #   udevadm control --reload-rules
+#   systemctl enable --now mon0-setup.service
 #
 # Logs:  journalctl -u mon0-setup.service
 
 [Unit]
 Description=Create Wi-Fi monitor interface (mon0) for packet capture
-# Allow NetworkManager to finish before we touch the interface
 After=NetworkManager.service
+Wants=NetworkManager.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+# Timeout must exceed WAIT_SECS in setup_mon0.sh (default 40s) plus setup time
+TimeoutStartSec=60
 ExecStart=/usr/local/sbin/setup_mon0.sh
 StandardOutput=journal
 StandardError=journal
 
 [Install]
-# Not enabled statically — started on demand by the udev rule
 WantedBy=multi-user.target

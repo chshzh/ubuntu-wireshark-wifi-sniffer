@@ -154,9 +154,16 @@ Three files in this repository automate the monitor interface setup whenever the
 | `mon0-setup.service` | systemd unit — runs the script when triggered |
 | `99-mon0-setup.rules` | udev rule — fires the service the moment the adapter is enumerated by the kernel |
 
-### Why udev instead of a plain systemd timer?
+### How boot vs. hot-plug is handled
 
-A USB Wi-Fi adapter is not guaranteed to appear before time-based systemd services run. A udev rule is **event-driven**: it fires exactly when the kernel registers the interface — whether at boot or when you hot-plug the dongle later. This avoids the "Interface not found" race condition.
+USB adapters are enumerated asynchronously and may appear after systemd has already started services. The two triggers work together:
+
+| Trigger | When it fires | How it works |
+|---|---|---|
+| `systemctl enable` (boot) | At `multi-user.target` | Script waits up to `WAIT_SECS` (40 s) for the adapter to appear, then proceeds |
+| udev rule (hot-plug) | The instant the kernel registers the interface | Starts the service immediately; adapter is already present so the wait exits at once |
+
+`Type=oneshot` + `RemainAfterExit=yes` prevents double-runs if both triggers fire at boot.
 
 ### Configuration
 
@@ -192,12 +199,10 @@ sudo cp 99-mon0-setup.rules /etc/udev/rules.d/99-mon0-setup.rules
 # 2. Make the script executable
 sudo chmod +x /usr/local/sbin/setup_mon0.sh
 
-# 3. Reload systemd and udev rules
+# 3. Reload systemd and udev rules, then enable the service
 sudo systemctl daemon-reload
 sudo udevadm control --reload-rules
-
-# NOTE: do NOT run "systemctl enable mon0-setup.service"
-# The udev rule starts it automatically when the adapter appears.
+sudo systemctl enable --now mon0-setup.service
 ```
 
 ### Verify and manage
@@ -223,7 +228,7 @@ iw dev mon0 info
 ### Uninstall
 
 ```bash
-sudo systemctl stop mon0-setup.service
+sudo systemctl disable --now mon0-setup.service
 sudo rm /etc/systemd/system/mon0-setup.service
 sudo rm /etc/udev/rules.d/99-mon0-setup.rules
 sudo rm /usr/local/sbin/setup_mon0.sh
