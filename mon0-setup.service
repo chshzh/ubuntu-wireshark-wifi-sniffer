@@ -1,0 +1,26 @@
+# mon0-setup.service — systemd unit to create a Wi-Fi monitor interface on boot.
+#
+# Install instructions (run as root):
+#   cp mon0-setup.service /etc/systemd/system/
+#   cp setup_mon0.sh      /usr/local/sbin/
+#   chmod +x              /usr/local/sbin/setup_mon0.sh
+#   systemctl daemon-reload
+#   systemctl enable --now mon0-setup.service
+#
+# Logs:  journalctl -u mon0-setup.service
+
+[Unit]
+Description=Create Wi-Fi monitor interface (mon0) for packet capture
+# Wait until the network subsystem and udev have finished enumerating devices
+After=network-pre.target sys-subsystem-net-devices.target
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/setup_mon0.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

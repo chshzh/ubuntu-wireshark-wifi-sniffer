@@ -144,6 +144,83 @@ Security note:
 - Avoid running Wireshark GUI as root. Instead give `dumpcap` capabilities (see above) and use Wireshark for analysis.
 
 
+## Auto-start mon0 on Boot (systemd)
+
+Two files in this repository automate the monitor interface setup at every Ubuntu startup:
+
+| File | Purpose |
+|---|---|
+| `setup_mon0.sh` | Shell script — creates `mon0` from the sniffer adapter and sets the channel |
+| `mon0-setup.service` | systemd unit — runs the script after network devices are enumerated |
+
+### Configuration
+
+Before installing, open `setup_mon0.sh` and edit the three variables at the top:
+
+```bash
+IFACE="wlx289401bca7bd"   # physical interface name of your sniffer adapter
+MON_IFACE="mon0"           # name for the monitor virtual interface
+CHANNEL=165                # Wi-Fi channel to lock to (set to 0 to use FREQ_MHZ)
+FREQ_MHZ=5825              # frequency in MHz (used when CHANNEL=0)
+```
+
+### How it works
+
+On startup, the script:
+1. Checks whether `IFACE` exists — if the adapter is absent (unplugged) it exits silently without error.
+2. Tears down any leftover `mon0` from a previous session.
+3. Brings the physical interface down, creates `mon0` of type `monitor`, then brings `mon0` up.
+4. Sets the channel/frequency on `mon0`.
+
+Because the physical interface is taken down, this script is intended for a **dedicated sniffer adapter** (second USB dongle). Your primary Wi-Fi adapter for internet connectivity is not affected. See [the question about running both simultaneously](#networkmanager-and-ip-vs-iw) for background.
+
+### Installation
+
+Run the following commands once (requires root):
+
+```bash
+# 1. Copy files into place
+sudo cp setup_mon0.sh      /usr/local/sbin/setup_mon0.sh
+sudo cp mon0-setup.service /etc/systemd/system/mon0-setup.service
+
+# 2. Make the script executable
+sudo chmod +x /usr/local/sbin/setup_mon0.sh
+
+# 3. Reload systemd and enable the service
+sudo systemctl daemon-reload
+sudo systemctl enable --now mon0-setup.service
+```
+
+### Verify and manage
+
+```bash
+# Check service status and last run output
+systemctl status mon0-setup.service
+
+# View full logs
+journalctl -u mon0-setup.service
+
+# Run manually without rebooting (useful for testing config changes)
+sudo /usr/local/sbin/setup_mon0.sh
+
+# Confirm mon0 is up and on the right channel
+iw dev mon0 info
+
+# Disable auto-start (does not remove files)
+sudo systemctl disable mon0-setup.service
+```
+
+### Uninstall
+
+```bash
+sudo systemctl disable --now mon0-setup.service
+sudo rm /etc/systemd/system/mon0-setup.service
+sudo rm /usr/local/sbin/setup_mon0.sh
+sudo systemctl daemon-reload
+```
+
+---
+
 ## NetworkManager and `ip` vs `iw`
 
 These three tools operate at different layers and often get used together when preparing a wireless interface for monitoring. Knowing their roles helps avoid conflicts.
