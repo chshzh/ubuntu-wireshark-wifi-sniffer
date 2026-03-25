@@ -1,6 +1,6 @@
-# Kali Wireshark capture wifi packet from one specific channel
+# Ubuntu Wireshark capture wifi packet from one specific channel
 
-This repository collects a short, practical guide and helper files for capturing Wi‑Fi traffic on a specific channel (for example: Channel 165 / 5825 MHz at 5GHz band) using Kali Linux and Wireshark. The guide is written so you can target any channel by changing the channel number or frequency.
+This repository collects a short, practical guide and helper files for capturing Wi‑Fi traffic on a specific channel (for example: Channel 165 / 5825 MHz at 5GHz band) using Ubuntu Linux and Wireshark. The guide is written so you can target any channel by changing the channel number or frequency.
 
 IMPORTANT: follow local radio regulations. Only use channels and transmit modes that are legal for your country and that your hardware supports. This repo is intended for passive capture and diagnostics.
 
@@ -16,12 +16,12 @@ Wi‑Fi monitor mode and specific-channel capture require adapter and driver sup
 
 - Netgear A9000 reference: https://github.com/morrownr/USB-WiFi/blob/main/home/USB_WiFi_Adapters_that_are_supported_with_Linux_in-kernel_drivers.md#be6500---usb30---24-ghz-5-ghz-and-6-ghz-wifi-7
 
-That page lists adapters and whether they work with mainline kernel drivers (preferred) or require out-of-tree drivers. For Kali Linux, prefer adapters that are supported by in-kernel drivers for easiest monitor-mode operation.
+That page lists adapters and whether they work with mainline kernel drivers (preferred) or require out-of-tree drivers. For Ubuntu Linux, prefer adapters that are supported by in-kernel drivers for easiest monitor-mode operation.
 
 ## Setup Steps
 1. Identify your wireless interface:
    ```bash
-   ip link            # list interfaces (e.g. wlan0)
+   ip link            # list interfaces (e.g. wlx289401bca7bd)
    iw dev             # show wireless devices
    ```
 2. Check PHY capabilities and monitor-mode support:
@@ -34,8 +34,8 @@ That page lists adapters and whether they work with mainline kernel drivers (pre
    ```
 4. Create monitor interface and set the desired channel (example uses channel 165 / 5825 MHz):
    ```bash
-   ip link set wlan0 down
-   iw dev wlan0 interface add mon0 type monitor
+   ip link set wlx289401bca7bd down
+   iw dev wlx289401bca7bd interface add mon0 type monitor
    ip link set mon0 up
    # To set by channel number (if supported):
    iw dev mon0 set channel 165
@@ -148,7 +148,7 @@ Security note:
 
 These three tools operate at different layers and often get used together when preparing a wireless interface for monitoring. Knowing their roles helps avoid conflicts.
 
-- NetworkManager: a high-level service that automatically manages network interfaces and connections (Wi‑Fi, Ethernet, VPNs). It starts/stops `wpa_supplicant`, configures IP addressing, and may automatically change interface modes. On Kali you can control it with `systemctl` and `nmcli`.
+- NetworkManager: a high-level service that automatically manages network interfaces and connections (Wi‑Fi, Ethernet, VPNs). It starts/stops `wpa_supplicant`, configures IP addressing, and may automatically change interface modes. On Ubuntu you can control it with `systemctl` and `nmcli`.
    - Common commands:
       - `systemctl stop NetworkManager` — stop the service (prevents automatic reconfiguration).
       - `nmcli radio wifi off` — disable Wi‑Fi radio via NetworkManager.
@@ -170,12 +170,12 @@ Best practice when enabling monitor mode:
     ```bash
     systemctl stop NetworkManager
     # or
-    nmcli device set wlan0 managed no
+    nmcli device set wlx289401bca7bd managed no
     ```
 2. Use `ip` to take the physical interface down, then use `iw` to create the monitor interface and set the channel/frequency:
     ```bash
-    ip link set wlan0 down
-    iw dev wlan0 interface add mon0 type monitor
+    ip link set wlx289401bca7bd down
+    iw dev wlx289401bca7bd interface add mon0 type monitor
     ip link set mon0 up
     iw dev mon0 set freq 5825
     ```
@@ -184,7 +184,7 @@ Best practice when enabling monitor mode:
     ```bash
     ip link set mon0 down
     # remove monitor iface if desired: iw dev mon0 del
-    nmcli device set wlan0 managed yes
+    nmcli device set wlx289401bca7bd managed yes
     systemctl start NetworkManager
     ```
 
