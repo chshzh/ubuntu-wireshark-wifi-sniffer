@@ -144,30 +144,13 @@ Security note:
 - Avoid running Wireshark GUI as root. Instead give `dumpcap` capabilities (see above) and use Wireshark for analysis.
 
 
-## Auto-start mon0 on Boot (systemd)
+## Quick Start with setup_mon0.sh
 
-Three files in this repository automate the monitor interface setup whenever the sniffer adapter is present:
-
-| File | Purpose |
-|---|---|
-| `setup_mon0.sh` | Shell script — creates `mon0` from the sniffer adapter and sets the channel |
-| `mon0-setup.service` | systemd unit — runs the script when triggered |
-| `99-mon0-setup.rules` | udev rule — fires the service the moment the adapter is enumerated by the kernel |
-
-### How boot vs. hot-plug is handled
-
-USB adapters are enumerated asynchronously and may appear after systemd has already started services. The two triggers work together:
-
-| Trigger | When it fires | How it works |
-|---|---|---|
-| `systemctl enable` (boot) | At `multi-user.target` | Script waits up to `WAIT_SECS` (40 s) for the adapter to appear, then proceeds |
-| udev rule (hot-plug) | The instant the kernel registers the interface | Starts the service immediately; adapter is already present so the wait exits at once |
-
-`Type=oneshot` + `RemainAfterExit=yes` prevents double-runs if both triggers fire at boot.
+`setup_mon0.sh` sets up the `mon0` monitor interface and opens Wireshark in one step.
 
 ### Configuration
 
-Before installing, open `setup_mon0.sh` and edit the three variables at the top:
+Edit the variables at the top of `setup_mon0.sh` to match your environment:
 
 ```bash
 IFACE="wlx289401bca7bd"   # physical interface name of your sniffer adapter
@@ -176,65 +159,28 @@ CHANNEL=165                # Wi-Fi channel to lock to (set to 0 to use FREQ_MHZ)
 FREQ_MHZ=5825              # frequency in MHz (used when CHANNEL=0)
 ```
 
-### How it works
-
-On startup, the script:
-1. Checks whether `IFACE` exists — if the adapter is absent (unplugged) it exits silently without error.
-2. Tears down any leftover `mon0` from a previous session.
-3. Brings the physical interface down, creates `mon0` of type `monitor`, then brings `mon0` up.
-4. Sets the channel/frequency on `mon0`.
-
-Because the physical interface is taken down, this script is intended for a **dedicated sniffer adapter** (second USB dongle). Your primary Wi-Fi adapter for internet connectivity is not affected. See [the question about running both simultaneously](#networkmanager-and-ip-vs-iw) for background.
-
-### Installation
-
-Run the following commands once (requires root):
+### Install (one-time)
 
 ```bash
-# 1. Copy files into place
-sudo cp setup_mon0.sh       /usr/local/sbin/setup_mon0.sh
-sudo cp mon0-setup.service  /etc/systemd/system/mon0-setup.service
-sudo cp 99-mon0-setup.rules /etc/udev/rules.d/99-mon0-setup.rules
-
-# 2. Make the script executable
-sudo chmod +x /usr/local/sbin/setup_mon0.sh
-
-# 3. Reload systemd and udev rules, then enable the service
-sudo systemctl daemon-reload
-sudo udevadm control --reload-rules
-sudo systemctl enable --now mon0-setup.service
+sudo chmod +x setup_mon0.sh
 ```
 
-### Verify and manage
+### Usage
+
+Plug in the USB Wi-Fi adapter, then run:
 
 ```bash
-# Check service status and last run output
-systemctl status mon0-setup.service
-
-# View full logs
-journalctl -u mon0-setup.service
-
-# Simulate the udev add event to test without unplugging the dongle
-sudo udevadm trigger --action=add --subsystem-match=net \
-    --attr-match=ifindex=$(cat /sys/class/net/wlx289401bca7bd/ifindex)
-
-# Run the script manually (useful for testing config changes)
-sudo /usr/local/sbin/setup_mon0.sh
-
-# Confirm mon0 is up and on the right channel
-iw dev mon0 info
+sudo ./setup_mon0.sh
 ```
 
-### Uninstall
+The script will:
+1. Verify the adapter is present — if not, it prints a reminder to re-plug and exits.
+2. Clean up any leftover `mon0` from a previous session.
+3. Bring `wlx289401bca7bd` down, create `mon0` in monitor mode, bring it up.
+4. Tune `mon0` to the configured channel / frequency.
+5. Launch Wireshark on `mon0` and start capturing immediately.
 
-```bash
-sudo systemctl disable --now mon0-setup.service
-sudo rm /etc/systemd/system/mon0-setup.service
-sudo rm /etc/udev/rules.d/99-mon0-setup.rules
-sudo rm /usr/local/sbin/setup_mon0.sh
-sudo systemctl daemon-reload
-sudo udevadm control --reload-rules
-```
+> **Note:** This script is intended for a dedicated sniffer adapter (second USB dongle). Your primary Wi-Fi adapter for internet connectivity is not affected.
 
 ---
 

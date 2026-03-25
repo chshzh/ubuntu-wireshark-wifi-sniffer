@@ -1,14 +1,18 @@
 #!/usr/bin/env bash
-# setup_mon0.sh — Create a monitor interface (mon0) from a specific Wi-Fi adapter
-# on boot if the adapter is present.
+# setup_mon0.sh — Set up a Wi-Fi monitor interface and open Wireshark.
 #
-# Configuration: edit the three variables below to match your environment.
-# IFACE      : physical Wi-Fi interface name of the sniffer adapter
-# MON_IFACE  : name for the monitor virtual interface
-# CHANNEL    : Wi-Fi channel to lock the monitor interface to (0 = do not set)
-# FREQ_MHZ   : frequency in MHz (used when CHANNEL is 0, or leave 0 to skip)
+# Usage: sudo ./setup_mon0.sh
+#   (or: sudo /usr/local/sbin/setup_mon0.sh after installing)
 #
-# Install:  see README.md → "Auto-start mon0 on Boot (systemd)"
+# Run this script after plugging in the sniffer USB adapter.
+# It creates mon0 on the adapter, tunes it to the configured channel,
+# then launches Wireshark on that interface.
+#
+# Configuration: edit the variables below to match your environment.
+# IFACE     : physical Wi-Fi interface name of the sniffer adapter
+# MON_IFACE : name for the monitor virtual interface
+# CHANNEL   : Wi-Fi channel to lock to (0 = skip, use FREQ_MHZ instead)
+# FREQ_MHZ  : frequency in MHz (used when CHANNEL=0)
 
 set -euo pipefail
 
@@ -16,31 +20,23 @@ IFACE="wlx289401bca7bd"
 MON_IFACE="mon0"
 CHANNEL=165
 FREQ_MHZ=5825   # used only when CHANNEL=0
-WAIT_SECS=40    # max seconds to wait for the adapter to appear at boot
 
 log() { echo "[$(date '+%Y-%m-%d %T')] $*"; }
 
-# ── Wait for the adapter to appear ──────────────────────────────────────────
-# At boot the USB adapter may be enumerated after this service starts, so we
-# poll instead of failing immediately.  On hot-plug the adapter is already
-# present and the loop exits on the first iteration.
-count=0
-until ip link show "${IFACE}" &>/dev/null; do
-    if [[ ${count} -ge ${WAIT_SECS} ]]; then
-        log "Timed out after ${WAIT_SECS}s waiting for ${IFACE} — adapter not present, skipping."
-        exit 0
-    fi
-    sleep 1
-    (( count++ ))
-done
+# ── Guard: adapter must be present ──────────────────────────────────────────
+if ! ip link show "${IFACE}" &>/dev/null; then
+    log "ERROR: Interface ${IFACE} not found."
+    log "Unplug and re-plug the USB Wi-Fi adapter, then run this script again."
+    exit 1
+fi
 
-log "Adapter ${IFACE} detected after ${count}s — setting up ${MON_IFACE}..."
+log "Adapter ${IFACE} detected — setting up ${MON_IFACE}..."
 
 # ── Tear down any previous monitor interface with the same name ───────────
 if ip link show "${MON_IFACE}" &>/dev/null; then
     log "Removing existing ${MON_IFACE}..."
-    ip link set "${MON_IFACE}" down  || true
-    iw dev "${MON_IFACE}" del        || true
+    ip link set "${MON_IFACE}" down || true
+    iw dev "${MON_IFACE}" del       || true
 fi
 
 # ── Create monitor interface ─────────────────────────────────────────────
@@ -63,3 +59,7 @@ fi
 # ── Final status ─────────────────────────────────────────────────────────
 log "Done. Current state:"
 iw dev "${MON_IFACE}" info
+
+# ── Launch Wireshark ─────────────────────────────────────────────────────
+log "Launching Wireshark on ${MON_IFACE}..."
+wireshark -i "${MON_IFACE}" -k &
